@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0D1117">
+
+    <View
+        android:id="@+id/gridBg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_grid"/>
+
+    <View
+        android:id="@+id/scanLine"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:background="@drawable/scan_line_gradient"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <View android:layout_width="28dp" android:layout_height="28dp"
+        android:background="@drawable/corner_tl"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="18dp"/>
+    <View android:layout_width="28dp" android:layout_height="28dp"
+        android:background="@drawable/corner_tr"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="18dp"/>
+    <View android:layout_width="28dp" android:layout_height="28dp"
+        android:background="@drawable/corner_bl"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="18dp"/>
+    <View android:layout_width="28dp" android:layout_height="28dp"
+        android:background="@drawable/corner_br"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="18dp"/>
+
+    <LinearLayout
+        android:id="@+id/centerColumn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/logoImage"
+            android:layout_width="160dp"
+            android:layout_height="100dp"
+            app:srcCompat="@drawable/ic_logo_eye"
+            android:alpha="0"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:id="@+id/tvAppName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PinVision"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.12"
+            android:textColor="#E8EEF5"
+            android:alpha="0"
+            android:layout_marginBottom="6dp"/>
+
+        <TextView
+            android:id="@+id/tvTagline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="COMPUTER VISION · BOWLING"
+            android:textSize="11sp"
+            android:letterSpacing="0.3"
+            android:textColor="#4A6080"
+            android:fontFamily="monospace"
+            android:alpha="0"
+            android:layout_marginBottom="20dp"/>
+
+        <View
+            android:id="@+id/divider"
+            android:layout_width="120dp"
+            android:layout_height="1dp"
+            android:background="#4A9EFF"
+            android:alpha="0"
+            android:layout_marginBottom="24dp"/>
+
+        <LinearLayout
+            android:id="@+id/badgeRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:alpha="0"
+            android:layout_marginBottom="28dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● STANDING"
+                android:textColor="#22C55E"
+                android:fontFamily="monospace"
+                android:textSize="10sp"
+                android:background="@drawable/badge_green"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:layout_marginEnd="10dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● FALLEN"
+                android:textColor="#EF4444"
+                android:fontFamily="monospace"
+                android:textSize="10sp"
+                android:background="@drawable/badge_red"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:layout_marginEnd="10dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="◎ TRACKING"
+                android:textColor="#4A9EFF"
+                android:fontFamily="monospace"
+                android:textSize="10sp"
+                android:background="@drawable/badge_blue"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/statusRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:alpha="0"
+            android:layout_marginBottom="14dp">
+
+            <View
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:background="@drawable/dot_green"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="INITIALIZING ON-DEVICE MODEL"
+                android:textColor="#4A6080"
+                android:fontFamily="monospace"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"/>
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+            android:layout_width="220dp"
+            android:layout_height="3dp"
+            android:progressDrawable="@drawable/progress_blue"
+            android:indeterminate="false"
+            android:progress="0"
+            android:alpha="0"/>
+
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

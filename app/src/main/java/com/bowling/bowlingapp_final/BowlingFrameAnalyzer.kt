@@ -43,6 +43,12 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
             }
             interpreter = Interpreter(modelBuffer, options)
             Log.d("BowlingCV", "✅ TFLite loaded manually")
+
+            // Diagnostic logging for Bug 5
+            val inputTensor = interpreter!!.getInputTensor(0)
+            val outputTensor = interpreter!!.getOutputTensor(0)
+            Log.d("BowlingCV", "Model input shape: ${inputTensor.shape().toList()}")
+            Log.d("BowlingCV", "Model output shape: ${outputTensor.shape().toList()}")
         } catch (e: Exception) {
             Log.e("BowlingCV", "❌ TFLite load failed: ${e.message}")
         }
@@ -67,13 +73,19 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
         val detections = detectWithTFLite(inputMat)
         val carPos = detectCarHSV()
         
+        // Always track car, even before pin registration
+        carPos?.let { 
+            carPath.add(it)
+            if (carPath.size > 300) carPath.removeAt(0) 
+        }
+        
         if (!registered) tryRegister(detections)
         else {
             updatePins(detections)
-            carPos?.let { carPath.add(it); if (carPath.size > 150) carPath.removeAt(0) }
         }
         
         val elapsed = if (startTimeMs > 0) ((System.currentTimeMillis() - startTimeMs) / 1000).toInt() else 0
+        val isComplete = registered && pins.isNotEmpty() && pins.all { !it.isStanding }
         val state = AnalysisState(
             phase = if (registered) "TRACKING" else "SCANNING",
             pins = pins.map { it.copy() },
@@ -82,7 +94,8 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
             standingCount = pins.count { it.isStanding },
             elapsedSec = elapsed,
             previewW = previewW,
-            previewH = previewH
+            previewH = previewH,
+            isComplete = isComplete
         )
         Log.d("BowlingCV", "📤 STATE: pins=${state.pins.size} standing=${state.standingCount} fallen=${state.fallenCount} preview=${previewW}x${previewH}")
         return state
@@ -91,18 +104,48 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
     @androidx.camera.core.ExperimentalGetImage
     override fun analyze(imageProxy: ImageProxy) {
         try {
-            val image = imageProxy.image ?: return
+            val image = imageProxy.image ?: run { imageProxy.close(); return }
             previewW = imageProxy.width
             previewH = imageProxy.height
 
-            // YUV -> RGB (Simplified version for context)
-            val yBuffer = image.planes[0].buffer
-            val uBuffer = image.planes[1].buffer
-            val vBuffer = image.planes[2].buffer
-            val nv21 = ByteArray(yBuffer.remaining() + uBuffer.remaining() + vBuffer.remaining())
-            yBuffer.get(nv21, 0, yBuffer.remaining())
-            vBuffer.get(nv21, yBuffer.remaining(), vBuffer.remaining())
-            uBuffer.get(nv21, yBuffer.remaining() + vBuffer.remaining(), uBuffer.remaining())
+            val yPlane = image.planes[0]
+            val uPlane = image.planes[1]
+            val vPlane = image.planes[2]
+
+            val yBuffer = yPlane.buffer
+            val uBuffer = uPlane.buffer
+            val vBuffer = vPlane.buffer
+
+            val ySize = yBuffer.remaining()
+            val uSize = uBuffer.remaining()
+            val vSize = vBuffer.remaining()
+
+            // Build proper NV21: Y plane + interleaved VU
+            val nv21 = ByteArray(ySize + uSize + vSize)
+            yBuffer.get(nv21, 0, ySize)
+
+            // NV21 needs VU interleaved — V first, then U, but we must respect strides
+            val vPixelStride = vPlane.pixelStride
+            val uPixelStride = uPlane.pixelStride
+
+            if (vPixelStride == 2 && uPixelStride == 2) {
+                // Fast path: planes are already interleaved on device
+                vBuffer.get(nv21, ySize, vSize)
+                // U follows naturally in the shared buffer; just copy remaining
+            } else {
+                // Fallback: manually interleave
+                val vArr = ByteArray(vSize); vBuffer.get(vArr)
+                val uArr = ByteArray(uSize); uBuffer.get(uArr)
+                var idx = ySize
+                val chromaHeight = imageProxy.height / 2
+                val chromaWidth = imageProxy.width / 2
+                for (row in 0 until chromaHeight) {
+                    for (col in 0 until chromaWidth) {
+                        nv21[idx++] = vArr[row * vPlane.rowStride / vPixelStride * vPixelStride + col * vPixelStride]
+                        nv21[idx++] = uArr[row * uPlane.rowStride / uPixelStride * uPixelStride + col * uPixelStride]
+                    }
+                }
+            }
             
             val yuvMat = Mat(imageProxy.height + imageProxy.height / 2, imageProxy.width, CvType.CV_8UC1)
             yuvMat.put(0, 0, nv21)
@@ -113,6 +156,7 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
             processCurrentFrame(rgbMat)
 
             val elapsed = if (startTimeMs > 0) ((System.currentTimeMillis() - startTimeMs) / 1000).toInt() else 0
+            val isComplete = registered && pins.isNotEmpty() && pins.all { !it.isStanding }
             onResult(AnalysisState(
                 phase = if (registered) "TRACKING" else "SCANNING",
                 pins = pins.map { it.copy() },
@@ -121,10 +165,11 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
                 standingCount = pins.count { it.isStanding },
                 elapsedSec = elapsed,
                 previewW = previewW,
-                previewH = previewH
+                previewH = previewH,
+                isComplete = isComplete
             ))
         } catch (e: Exception) {
-            Log.e("BowlingCV", "Analysis error: ${e.message}")
+            Log.e("BowlingCV", "Analysis error: ${e.message}", e)
         } finally {
             imageProxy.close()
         }
@@ -135,10 +180,15 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
         val detections = detectWithTFLite(mat)
         val carPos = detectCarHSV()
 
+        // Always track car, even before pin registration
+        carPos?.let { 
+            carPath.add(it)
+            if (carPath.size > 300) carPath.removeAt(0) 
+        }
+
         if (!registered) tryRegister(detections)
         else {
             updatePins(detections)
-            carPos?.let { carPath.add(it); if (carPath.size > 150) carPath.removeAt(0) }
         }
     }
 
@@ -197,13 +247,13 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
     }
 
     private fun detectCarHSV(): Point? {
-        Core.inRange(hsvMat, Scalar(10.0, 150.0, 150.0), Scalar(25.0, 255.0, 255.0), carMask)
+        Core.inRange(hsvMat, Scalar(5.0, 120.0, 100.0), Scalar(35.0, 255.0, 255.0), carMask)
         Imgproc.morphologyEx(carMask, carMask, Imgproc.MORPH_OPEN, kernel)
         val cnts = mutableListOf<MatOfPoint>()
         Imgproc.findContours(carMask, cnts, Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
         if (cnts.isEmpty()) return null
         val big = cnts.maxByOrNull { Imgproc.contourArea(it) } ?: return null
-        if (Imgproc.contourArea(big) < 200) return null
+        if (Imgproc.contourArea(big) < 100) return null
         val r = Imgproc.boundingRect(big)
         val p = Point(r.x + r.width / 2.0, r.y + r.height / 2.0)
         big.release()
@@ -215,8 +265,8 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
         val standing = dets.filter { it["cls"] == 3 }
         if (standing.size >= 5) {
             regFrames++
-            if (regFrames >= 15) {
-                pins = standing.mapIndexed { i, d -> PinState(i, d["centroid"] as Point, true, -1, 0.0) }.toMutableList()
+            if (regFrames >= 8) {
+                pins = standing.mapIndexed { i, d -> PinState(i, d["centroid"] as Point, true, -1, 0.0, d["bbox"] as Rect) }.toMutableList()
                 registered = true
                 startTimeMs = System.currentTimeMillis()
                 fallCounter = 0
@@ -242,7 +292,10 @@ class BowlingFrameAnalyzer(context: Context, private val onResult: (AnalysisStat
             val match = closest(pin.centroid, standingDets, 70.0)
             if (match != null) {
                 if (dist(pin.centroid, match["centroid"] as Point) > 50.0) pin.isStanding = false
-                else pin.centroid = match["centroid"] as Point
+                else {
+                    pin.centroid = match["centroid"] as Point
+                    pin.bbox = match["bbox"] as Rect
+                }
             } else pin.isStanding = false
         }
         pins.removeAll { !it.isStanding && it.fallOrder == -1 }
